@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SafeScroll</title>
+    <link rel="stylesheet" type="text/css" href="popup.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="icons/icon48.png" alt="Logo" class="logo">
+            <h1>SafeScroll</h1>
+        </div>
+
+        <div class="status-card">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Active</span>
+            <label class="switch">
+                <input type="checkbox" id="toggleSwitch" checked>
+                <span class="slider round"></span>
+            </label>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-box">
+                <span class="stat-value" id="scannedCount">0</span>
+                <span class="stat-label">Scanned</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-value" id="blockedCount">0</span>
+                <span class="stat-label">Blocked</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            <a href="#" id="settingsLink">Settings</a>
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+
+</html>
