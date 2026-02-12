@@ -1,15 +1,18 @@
-// SafeScroll Content Script
+// SafeScroll Content Script - Optimized
 
 let isEnabled = true;
-const scannedImages = new Set();
+const imageStatus = new Map(); // url -> 'safe' | 'nsfw' | 'pending' | 'error'
 let stats = {
     scanned: 0,
     blocked: 0
 };
 
 // Initialize
-chrome.storage.local.get(['safeScrollEnabled'], function (result) {
+chrome.storage.local.get(['safeScrollEnabled', 'stats'], function (result) {
     isEnabled = result.safeScrollEnabled !== false;
+    if (result.stats) {
+        stats = result.stats;
+    }
     if (isEnabled) {
         startObserving();
     }
@@ -49,37 +52,90 @@ function scanAllImages() {
 }
 
 function unblurAll() {
-    const images = document.querySelectorAll('img[data-nsfw="true"]');
+    const images = document.querySelectorAll('img');
     images.forEach(img => {
+        // Remove blur filter
         img.style.filter = "none";
-        img.style.opacity = "1";
+        // Remove overlay if present (but keep wrapper?)
+        // Better to hide overlay
+        if (img.parentElement && img.parentElement.classList.contains('safescroll-wrapper')) {
+            const overlay = img.parentElement.querySelector('.safescroll-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
     });
 }
 
 function processImage(img) {
     if (!isEnabled) return;
-    if (scannedImages.has(img.src)) return; // Avoid re-scanning same URL
-    if (img.width < 50 || img.height < 50) return; // Skip tiny icons
-    if (img.src.startsWith('data:')) return; // Skip data URIs for now (can optimize later)
+    if (!img.src) return;
 
-    scannedImages.add(img.src);
+    // Skip tiny icons or data URIs
+    if (img.width < 50 || img.height < 50) return;
+    if (img.src.startsWith('data:')) return;
+
+    const src = img.src;
+    const status = imageStatus.get(src);
+
+    // 1. Cache Hit: NSFW (Instant Block)
+    if (status === 'nsfw') {
+        blockImage(img);
+        return;
+    }
+
+    // 2. Cache Hit: Safe (Ensure Unblurred)
+    if (status === 'safe') {
+        revealImage(img);
+        return;
+    }
+
+    // 3. Cache Hit: Pending (Maintain Blur)
+    if (status === 'pending') {
+        applyOptimisticBlur(img);
+        return;
+    }
+
+    // 4. Cache Miss: New Image (Optimistic Blur + Check)
+    imageStatus.set(src, 'pending');
     stats.scanned++;
     updateStats();
 
-    // Optimistically check/blur? No, wait for result to avoid flickering safe images.
-    // Or blur first then unblur if safe? (Better for safety, worse for UX).
-    // Let's stick to "check then blur" for now, or maybe a loading state?
-    // User requested: "if sfw ignore, else add a blocker"
+    applyOptimisticBlur(img);
 
-    classifyImage(img.src)
+    classifyImage(src)
         .then(isNSFW => {
             if (isNSFW) {
-                blockImage(img);
+                imageStatus.set(src, 'nsfw');
                 stats.blocked++;
                 updateStats();
+                blockImage(img);
+            } else {
+                imageStatus.set(src, 'safe');
+                revealImage(img);
             }
         })
-        .catch(err => console.error("SafeScroll Error:", err));
+        .catch(err => {
+            console.error("SafeScroll Error:", err);
+            // On error, default to safe to avoid permanent blur? 
+            // Or keep blurred? User asked to be fast
+            // Let's assume failures are rare and default to safe/unblur
+            imageStatus.set(src, 'error');
+            revealImage(img);
+        });
+}
+
+function applyOptimisticBlur(img) {
+    // If NOT already blocked with overlay
+    if (img.getAttribute('data-nsfw') === 'true') return;
+
+    // Apply black out immediately (optimistic)
+    img.style.filter = "brightness(0)";
+    img.style.transition = "filter 0.3s ease-out"; // smooth transition
+}
+
+function revealImage(img) {
+    if (img.getAttribute('data-nsfw') === 'true') return; // Don't unblock if officially blocked
+
+    img.style.filter = "none";
 }
 
 async function classifyImage(url) {
@@ -95,7 +151,7 @@ async function classifyImage(url) {
                 console.error("API error:", response.error);
                 resolve(false);
             } else {
-                resolve(response.is_nsfw);
+                resolve(response && response.is_nsfw);
             }
         });
     });
@@ -103,16 +159,27 @@ async function classifyImage(url) {
 
 function blockImage(img) {
     // Avoid double-blocking
-    if (img.getAttribute('data-nsfw') === 'true') return;
+    if (img.getAttribute('data-nsfw') === 'true') {
+        // Ensure wrapper/overlay exists in case of DOM manipulation
+        if (!img.parentElement.classList.contains('safescroll-wrapper')) {
+            // Re-wrap if wrapper lost
+            wrapImage(img);
+        }
+        return;
+    }
 
     img.setAttribute('data-nsfw', 'true');
-    img.style.filter = "blur(20px)";
+    img.style.filter = "brightness(0)";
 
+    wrapImage(img);
+}
+
+function wrapImage(img) {
     // Create wrapper to hold image and overlay
     const wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
     wrapper.style.display = 'inline-block'; // Or match img display?
-    wrapper.style.width = img.width + 'px';
+    wrapper.style.width = img.width + 'px'; // Fix width to prevent layout shift
     wrapper.style.height = img.height + 'px';
     wrapper.className = 'safescroll-wrapper';
 
@@ -128,7 +195,7 @@ function blockImage(img) {
     overlay.style.flexDirection = 'column';
     overlay.style.justifyContent = 'center';
     overlay.style.alignItems = 'center';
-    overlay.style.backgroundColor = 'black';
+    overlay.style.backgroundColor = 'rgba(0,0,0,1)'; // Solid black overlay just in case
     overlay.style.zIndex = '10';
     overlay.style.borderRadius = '4px'; // Soft corners
 
@@ -163,7 +230,7 @@ function blockImage(img) {
         img.style.filter = 'none';
         // Mark as manually revealed?
         img.setAttribute('data-revealed', 'true');
-        // Unwrap? Optional. Leaving wrapper is safer for layout stability.
+        // Retrieve wrapper if needed? 
     };
 
     overlay.appendChild(text);
@@ -177,18 +244,41 @@ function blockImage(img) {
     }
 }
 
+function isContextInvalid() {
+    return !chrome.runtime || !chrome.runtime.id;
+}
+
 function updateStats() {
+    if (isContextInvalid()) {
+        stopObserving(); // Stop trying to do work if we are disconnected
+        return;
+    }
+
     // Save to storage so popup can read it even if popup is closed
-    chrome.storage.local.set({ stats: stats });
+    try {
+        chrome.storage.local.set({ stats: stats });
+    } catch (e) {
+        console.warn("SafeScroll: Storage update failed (context likely invalidated)", e);
+        stopObserving();
+        return;
+    }
 
     // Send to popup if open (optional, but good for realtime)
-    chrome.runtime.sendMessage({ action: "updateStats", stats: stats }).catch(() => {
-        // Popeup might be closed, ignore error
-    });
+    try {
+        chrome.runtime.sendMessage({ action: "updateStats", stats: stats }).catch(() => {
+            // Popeup might be closed, ignore error
+        });
+    } catch (e) {
+        // Ignore synchronous errors too
+    }
 }
 
 // MutationObserver to catch new images as you scroll
 const observer = new MutationObserver((mutations) => {
+    if (isContextInvalid()) {
+        stopObserving();
+        return;
+    }
     if (!isEnabled) return;
 
     mutations.forEach(mutation => {
@@ -198,8 +288,11 @@ const observer = new MutationObserver((mutations) => {
                     processImage(node);
                 }
                 // Check children
-                node.querySelectorAll && node.querySelectorAll('img').forEach(processImage);
+                if (node.querySelectorAll) {
+                    node.querySelectorAll('img').forEach(processImage);
+                }
             }
         });
     });
 });
+
