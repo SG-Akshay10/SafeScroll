@@ -12,6 +12,16 @@
         "https://akshay-sg-safescroll.hf.space/*",
         "<all_urls>"
     ],
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "safescroll@akshay.sg",
+            "data_collection_permissions": {
+                "required": [
+                    "websiteContent"
+                ]
+            }
+        }
+    },
     "background": {
         "service_worker": "background.js"
     },

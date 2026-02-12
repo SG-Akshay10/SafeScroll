@@ -14,7 +14,12 @@
     ],
     "browser_specific_settings": {
         "gecko": {
-            "id": "safescroll@akshay.sg"
+            "id": "safescroll@akshay.sg",
+            "data_collection_permissions": {
+                "required": [
+                    "websiteContent"
+                ]
+            }
         }
     },
     "background": {
