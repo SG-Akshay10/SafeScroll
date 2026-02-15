@@ -2,6 +2,10 @@
 
 SafeScroll is a powerful Chrome/Firefox extension designed to keep your browsing experience clean and distraction-free. It uses machine learning to instantly detect and blur NSFW content in your web feeds (Twitter, Reddit, etc.) before you even see it.
 
+> [!IMPORTANT]
+> **SafeScroll is now officially approved on Firefox!** 🦊  
+> [**Install SafeScroll for Firefox**](https://addons.mozilla.org/en-US/firefox/addon/safescroll-nsfw-blocker/)
+
 ![SafeScroll Logo](extension/icons/icon128.png)
 
 ## 🚀 Key Features
@@ -52,15 +56,17 @@ python app.py
 The server will start at `http://localhost:8000`.
 
 ### 2. Browser Extension
+**Firefox:**
+- **[Install from Firefox Add-ons Store](https://addons.mozilla.org/en-US/firefox/addon/safescroll-nsfw-blocker/)** (Recommended)
+- **Manual Load:**
+  1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
+  2. Click **Load Temporary Add-on...**.
+  3. Select the `manifest.json` inside the `borderify` folder.
+
 **Chrome:**
 1. Open Chrome and navigate to `chrome://extensions/`.
 2. Enable **Developer mode** (top right).
 3. Click **Load unpacked** and select the `extension` folder.
-
-**Firefox:**
-1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
-2. Click **Load Temporary Add-on...**.
-3. Select the `manifest.json` inside the `borderify` (Firefox version) or `extension` folder.
 
 ## ⚙️ Configuration
 By default, the extension is configured to connect to a hosted Hugging Face Space:
